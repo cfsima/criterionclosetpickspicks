@@ -1,24 +1,86 @@
 import asyncio
 import csv
 import re
+import json
+import os
 from playwright.async_api import async_playwright
 from collections import defaultdict
 
 MAIN_URL = "https://www.criterion.com/closet-picks"
 OUTPUT_FILE = "closet_picks.csv"
+STATE_FILE = "scrape_state.json"
 CONCURRENCY = 3
 
 def clean_picker_name(text):
     text = re.sub(r"[’']s? Closet Picks.*$", "", text, flags=re.IGNORECASE).strip()
-    return text
+    # Uppercase to match the existing CSV format which uses uppercase names
+    return text.upper()
 
-async def get_collections(page):
-    print("Visiting main page...")
+def load_state():
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading state: {e}")
+    return {}
+
+def save_state(last_url):
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump({"last_scraped_url": last_url}, f, indent=2)
+        print(f"State saved: {last_url}")
+    except Exception as e:
+        print(f"Error saving state: {e}")
+
+def load_existing_picks(filepath):
+    aggregated = defaultdict(lambda: {"count": 0, "pickers": []})
+    if not os.path.exists(filepath):
+        return aggregated
+
+    print(f"Loading existing picks from {filepath}...")
+    with open(filepath, "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        try:
+            next(reader)  # skip header
+        except StopIteration:
+            return aggregated
+
+        count_loaded = 0
+        for row in reader:
+            if len(row) < 4: continue
+            title = row[0]
+            director = row[1]
+            pickers_str = row[3]
+
+            # Split and clean pickers
+            pickers = [p.strip() for p in pickers_str.split(", ") if p.strip()]
+
+            key = (title, director)
+            aggregated[key]["pickers"] = pickers
+            aggregated[key]["count"] = len(pickers)
+            count_loaded += 1
+
+    print(f"Loaded {count_loaded} movies from CSV.")
+    return aggregated
+
+async def get_collections(page, stop_url=None):
+    print(f"Visiting main page... (Stop URL: {stop_url})")
     await page.goto(MAIN_URL)
 
     # Scroll to load all
     last_height = await page.evaluate("document.body.scrollHeight")
+
     while True:
+        # Check if stop_url is present in current DOM to stop scrolling early
+        if stop_url:
+            slug = stop_url.split("/")[-1]
+            # Check if any anchor containing the slug exists
+            count = await page.locator(f"a[href*='{slug}']").count()
+            if count > 0:
+                print(f"Found stop URL marker ({slug}) in content. Stopping scroll.")
+                break
+
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         try:
             await page.wait_for_timeout(2000)
@@ -44,18 +106,28 @@ async def get_collections(page):
             href = await el.get_attribute("href")
             if not href: continue
 
+            full_href = href
+            if href.startswith("/"):
+                full_href = "https://www.criterion.com" + href
+
+            # Check stop condition
+            if stop_url:
+                 # Check strict URL or slug match
+                 slug = stop_url.split("/")[-1]
+                 if stop_url == full_href or (slug in full_href and slug != ""):
+                     print(f"Reached last scraped URL: {full_href}. Stopping extraction.")
+                     break
+
             title_el = el.locator("p.header_lvl2")
             if await title_el.count() > 0:
                 raw_name = await title_el.inner_text()
                 name = clean_picker_name(raw_name)
-                if href.startswith("/"):
-                    href = "https://www.criterion.com" + href
 
-                collections.append({"url": href, "picker": name})
+                collections.append({"url": full_href, "picker": name})
         except Exception as e:
             print(f"Error extracting element: {e}")
 
-    print(f"Found {len(collections)} collections.")
+    print(f"Found {len(collections)} new collections.")
     return collections
 
 async def scrape_collection(browser, collection):
@@ -113,6 +185,9 @@ async def scrape_collection(browser, collection):
     return picks
 
 async def main():
+    state = load_state()
+    last_url = state.get("last_scraped_url")
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
 
@@ -122,18 +197,19 @@ async def main():
              user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
-        collections = await get_collections(page)
+        collections = await get_collections(page, stop_url=last_url)
         await page.close()
         await context.close()
 
-        # Limit for testing? No, user wants full. But for debugging...
-        # Let's try first 5 again to see if it works with concurrency 1
-        # collections = collections[:5]
+        if not collections:
+            print("No new collections found.")
+            await browser.close()
+            return
 
         all_picks = []
         semaphore = asyncio.Semaphore(CONCURRENCY)
 
-        print(f"Starting to scrape {len(collections)} collections...")
+        print(f"Starting to scrape {len(collections)} new collections...")
 
         async def scrape_with_sem(col):
             async with semaphore:
@@ -153,12 +229,20 @@ async def main():
 
         await browser.close()
 
-        aggregated = defaultdict(lambda: {"count": 0, "pickers": []})
+        # Load existing data
+        aggregated = load_existing_picks(OUTPUT_FILE)
 
+        # Merge new picks
+        print(f"Merging {len(all_picks)} new picks...")
         for pick in all_picks:
             key = (pick["title"], pick["director"])
-            aggregated[key]["count"] += 1
-            aggregated[key]["pickers"].append(pick["picker"])
+            picker = pick["picker"]
+
+            # Check if this picker is already in the list for this movie
+            existing_pickers = set(aggregated[key]["pickers"])
+            if picker not in existing_pickers:
+                aggregated[key]["pickers"].append(picker)
+                aggregated[key]["count"] = len(aggregated[key]["pickers"])
 
         sorted_data = sorted(aggregated.items(), key=lambda x: x[1]["count"], reverse=True)
 
@@ -170,6 +254,11 @@ async def main():
             for (title, director), data in sorted_data:
                 pickers_str = ", ".join(data["pickers"])
                 writer.writerow([title, director, data["count"], pickers_str])
+
+        # Update State with the newest URL
+        if collections:
+            newest_url = collections[0]["url"]
+            save_state(newest_url)
 
         print("Done.")
 
