@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criterion Closet Picks Data</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Criterion Closet Picks</h1>
+            <p>Data scraped from Criterion Collection Closet Picks videos.</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="movies">Top Movies</button>
+            <button class="tab-btn" data-tab="directors">Top Directors</button>
+        </nav>
+
+        <main id="content">
+            <div id="movies" class="tab-content active">
+                <div class="loading">Loading data...</div>
+                <table id="movies-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Movie Title</th>
+                            <th>Director</th>
+                            <th>Count</th>
+                            <th>Picked By</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div id="directors" class="tab-content">
+                <div class="loading">Loading data...</div>
+                <table id="directors-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Director</th>
+                            <th>Total Picks</th>
+                            <th>Top Movies Picked</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </main>
+
+        <footer>
+            <p>Updated weekly via GitHub Actions.</p>
+            <p><a href="https://github.com/criterion-data/closet-picks">View Source</a></p>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

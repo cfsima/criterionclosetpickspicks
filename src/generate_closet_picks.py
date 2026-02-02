@@ -7,7 +7,7 @@ from playwright.async_api import async_playwright
 from collections import defaultdict
 
 MAIN_URL = "https://www.criterion.com/closet-picks"
-OUTPUT_FILE = "closet_picks.csv"
+OUTPUT_FILE = "docs/closet_picks.csv"
 STATE_FILE = "scrape_state.json"
 CONCURRENCY = 3
 
@@ -378,6 +378,7 @@ async def main():
         sorted_data = sorted(aggregated.items(), key=lambda x: x[1]["count"], reverse=True)
 
         print(f"Writing {len(sorted_data)} unique movies to {OUTPUT_FILE}...")
+        os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
         with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["Movie Title", "Director", "Count", "Picked By"])
