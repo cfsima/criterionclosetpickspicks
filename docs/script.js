@@ -13,6 +13,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Toggle Expandable Lists (Pickers / Movies)
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('picker-toggle')) {
+            const list = e.target.nextElementSibling;
+            if (list && list.classList.contains('pickers-list')) {
+                list.classList.toggle('hidden');
+                const isHidden = list.classList.contains('hidden');
+                const count = e.target.dataset.count;
+                const label = e.target.dataset.label;
+                e.target.textContent = isHidden ? `View ${count} ${label}` : `Hide ${label}`;
+            }
+        }
+    });
+
     // Fetch and Process Data
     fetchData();
 });
@@ -87,7 +101,7 @@ function processAndRender(rows) {
         const title = row[0];
         const director = row[1];
         const count = parseInt(row[2], 10);
-        const pickedBy = row[3]; // Not strictly needed for stats but displayed in movies tab
+        const pickedBy = row[3];
 
         // Movies List
         movies.push({
@@ -98,11 +112,6 @@ function processAndRender(rows) {
         });
 
         // Directors Aggregation
-        // Sometimes director field has " and " or multiple directors.
-        // For simplicity, we stick to the main director string as the key,
-        // or we could split. The Python script normalizes some but leaves pairs like "Powell and Pressburger".
-        // Let's treat the string as the unique key for now to match the CSV logic.
-
         if (!directorsMap[director]) {
             directorsMap[director] = {
                 name: director,
@@ -126,6 +135,15 @@ function processAndRender(rows) {
     renderDirectors(directors);
 }
 
+function createToggleHtml(count, content, label) {
+    return `
+       <div class="picker-container">
+           <button class="picker-toggle" data-count="${count}" data-label="${label}">View ${count} ${label}</button>
+           <div class="pickers-list hidden">${content}</div>
+       </div>
+   `;
+}
+
 function renderMovies(movies) {
     const tbody = document.querySelector('#movies-table tbody');
     tbody.innerHTML = '';
@@ -133,12 +151,15 @@ function renderMovies(movies) {
 
     movies.forEach((movie, index) => {
         const tr = document.createElement('tr');
+
+        const pickersHtml = createToggleHtml(movie.count, escapeHtml(movie.pickedBy), 'Pickers');
+
         tr.innerHTML = `
             <td>${index + 1}</td>
             <td style="font-weight: bold;">${escapeHtml(movie.title)}</td>
             <td>${escapeHtml(movie.director)}</td>
             <td>${movie.count}</td>
-            <td style="font-size: 0.9em; color: #555;">${escapeHtml(movie.pickedBy)}</td>
+            <td>${pickersHtml}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -150,18 +171,21 @@ function renderDirectors(directors) {
     document.querySelector('#directors .loading').style.display = 'none';
 
     directors.forEach((dir, index) => {
-        // Format top movies string
         // Sort director's movies by count desc
         dir.movies.sort((a, b) => b.count - a.count);
 
         const movieStr = dir.movies.map(m => `${m.title} (${m.count})`).join(', ');
+
+        // Count of unique movies picked for this director
+        const movieCount = dir.movies.length;
+        const moviesHtml = createToggleHtml(movieCount, escapeHtml(movieStr), 'Movies');
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${index + 1}</td>
             <td style="font-weight: bold;">${escapeHtml(dir.name)}</td>
             <td>${dir.totalPicks}</td>
-            <td style="font-size: 0.9em; color: #555;">${escapeHtml(movieStr)}</td>
+            <td>${moviesHtml}</td>
         `;
         tbody.appendChild(tr);
     });
