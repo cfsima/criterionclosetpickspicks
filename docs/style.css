@@ -1,11 +1,12 @@
 :root {
-    --primary-color: #333;
-    --accent-color: #e50914; /* Netflix red-ish, but criterion uses black/white mostly. Let's stick to B&W with a subtle accent. */
-    --accent-color: #000;
-    --bg-color: #f4f4f4;
-    --text-color: #333;
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --text-color: #e0e0e0;
+    --text-muted: #a0a0a0;
+    --accent-color: #ffd700; /* Cinematic Gold */
+    --border-color: #333;
     --white: #fff;
-    --border-color: #ddd;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 body {
@@ -33,6 +34,11 @@ header h1 {
     margin-bottom: 0.5rem;
     font-weight: 700;
     letter-spacing: -1px;
+    color: var(--white);
+}
+
+header p {
+    color: var(--text-muted);
 }
 
 .tabs {
@@ -49,7 +55,7 @@ header h1 {
     font-size: 1.1rem;
     cursor: pointer;
     font-weight: 600;
-    color: #666;
+    color: var(--text-muted);
     transition: all 0.3s ease;
     border-bottom: 3px solid transparent;
     margin-bottom: -2px;
@@ -66,10 +72,10 @@ header h1 {
 
 .tab-content {
     display: none;
-    background: var(--white);
+    background: var(--card-bg);
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    box-shadow: var(--shadow);
 }
 
 .tab-content.active {
@@ -95,54 +101,219 @@ th, td {
 }
 
 th {
-    background-color: #fafafa;
+    background-color: #252525;
+    color: var(--accent-color);
     font-weight: 600;
     position: sticky;
     top: 0;
 }
 
 tr:hover {
-    background-color: #f9f9f9;
+    background-color: #2a2a2a;
 }
 
 .loading {
     text-align: center;
     padding: 40px;
     font-style: italic;
-    color: #888;
+    color: var(--text-muted);
+}
+
+/* Pickers Toggle Styles */
+.picker-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.picker-toggle {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    margin-bottom: 5px;
+}
+
+.picker-toggle:hover {
+    text-decoration: underline;
+}
+
+.pickers-list {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    transition: max-height 0.3s ease-out;
+}
+
+.pickers-list.hidden {
+    display: none;
 }
 
 footer {
     text-align: center;
     margin-top: 40px;
-    color: #888;
+    color: var(--text-muted);
     font-size: 0.9rem;
 }
 
 footer a {
-    color: #555;
+    color: var(--text-muted);
     text-decoration: none;
 }
 
 footer a:hover {
+    color: var(--accent-color);
     text-decoration: underline;
 }
 
-/* Responsive */
+/* Responsive Mobile Card View */
 @media (max-width: 768px) {
-    th, td {
-        padding: 10px;
-        font-size: 0.9rem;
-    }
-
-    /* Hide "Picked By" column on mobile for movies if it gets too crowded,
-       but it's the most interesting part. Let's just scroll or wrap. */
     .container {
         padding: 10px;
     }
 
-    table {
+    thead {
+        display: none;
+    }
+
+    table, tbody, tr, td {
         display: block;
-        overflow-x: auto;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    tr {
+        margin-bottom: 15px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: var(--shadow);
+        position: relative;
+        padding-top: 45px; /* Space for Rank/Count badges */
+    }
+
+    td {
+        padding: 5px 0;
+        border: none;
+        text-align: left;
+    }
+
+    /* === Movies Table Mobile Styles === */
+
+    /* Rank */
+    #movies-table td:nth-child(1) {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        font-weight: bold;
+        color: var(--bg-color); /* Dark text on gold badge */
+        background: var(--accent-color);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    /* Title */
+    #movies-table td:nth-child(2) {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--white);
+        line-height: 1.2;
+        margin-bottom: 5px;
+    }
+
+    /* Director */
+    #movies-table td:nth-child(3) {
+        font-size: 1rem;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+    }
+
+    /* Count */
+    #movies-table td:nth-child(4) {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: #333;
+        color: var(--white);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    #movies-table td:nth-child(4)::after {
+        content: " Picks";
+        font-weight: normal;
+        font-size: 0.9em;
+        opacity: 0.8;
+    }
+
+    /* Picked By */
+    #movies-table td:nth-child(5) {
+        border-top: 1px solid var(--border-color);
+        margin-top: 10px;
+        padding-top: 10px;
+    }
+
+    /* === Directors Table Mobile Styles === */
+
+    /* Rank */
+    #directors-table td:nth-child(1) {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        font-weight: bold;
+        color: var(--bg-color);
+        background: var(--accent-color);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    /* Director Name */
+    #directors-table td:nth-child(2) {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--white);
+        line-height: 1.2;
+        margin-bottom: 10px;
+    }
+
+    /* Total Picks */
+    #directors-table td:nth-child(3) {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: #333;
+        color: var(--white);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    #directors-table td:nth-child(3)::after {
+        content: " Picks";
+        font-weight: normal;
+        font-size: 0.9em;
+        opacity: 0.8;
+    }
+
+    /* Top Movies */
+    #directors-table td:nth-child(4) {
+        border-top: 1px solid var(--border-color);
+        margin-top: 10px;
+        padding-top: 10px;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+    #directors-table td:nth-child(4)::before {
+        content: "Top Movies: ";
+        font-weight: bold;
+        color: var(--text-color);
     }
 }
