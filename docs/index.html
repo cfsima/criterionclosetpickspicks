@@ -18,6 +18,7 @@
         <nav class="tabs">
             <button class="tab-btn active" data-tab="movies">Top Movies</button>
             <button class="tab-btn" data-tab="directors">Top Directors</button>
+            <button class="tab-btn" data-tab="pickers">Picker Rankings</button>
         </nav>
 
         <main id="content">
@@ -46,6 +47,30 @@
                             <th>Director</th>
                             <th>Total Picks</th>
                             <th>Top Movies Picked</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div id="pickers" class="tab-content">
+                <div class="controls">
+                    <label>Ranking Mode:</label>
+                    <div class="toggle-group">
+                        <input type="radio" id="mode-canon" name="ranking-mode" value="canon" checked>
+                        <label for="mode-canon">Canon Taste</label>
+                        <input type="radio" id="mode-original" name="ranking-mode" value="original">
+                        <label for="mode-original">Original Taste</label>
+                    </div>
+                </div>
+                <div class="loading">Loading data...</div>
+                <table id="pickers-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Picker Name</th>
+                            <th>Score</th>
+                            <th>Picks Count</th>
                         </tr>
                     </thead>
                     <tbody></tbody>

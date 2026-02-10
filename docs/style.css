@@ -317,3 +317,105 @@ footer a:hover {
         color: var(--text-color);
     }
 }
+
+/* Picker Tab Controls */
+.controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+    gap: 15px;
+    padding: 10px;
+    background: #252525;
+    border-radius: 8px;
+}
+
+.controls label {
+    font-weight: bold;
+    color: var(--text-muted);
+}
+
+.toggle-group {
+    display: flex;
+    background: #1e1e1e;
+    border-radius: 20px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+}
+
+.toggle-group input[type="radio"] {
+    display: none;
+}
+
+.toggle-group label {
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 18px;
+    transition: all 0.2s ease;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.toggle-group input[type="radio"]:checked + label {
+    background: var(--accent-color);
+    color: var(--bg-color);
+    font-weight: bold;
+}
+
+/* === Pickers Table Mobile Styles === */
+@media (max-width: 768px) {
+    /* Rank */
+    #pickers-table td:nth-child(1) {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        font-weight: bold;
+        color: var(--bg-color);
+        background: var(--accent-color);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+
+    /* Picker Name */
+    #pickers-table td:nth-child(2) {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--white);
+        line-height: 1.2;
+        margin-bottom: 5px;
+        padding-top: 10px; /* Space from top */
+    }
+
+    /* Score */
+    #pickers-table td:nth-child(3) {
+        font-size: 1rem;
+        color: var(--accent-color);
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    #pickers-table td:nth-child(3)::before {
+        content: "Score: ";
+        color: var(--text-muted);
+        font-weight: normal;
+    }
+
+    /* Picks Count */
+    #pickers-table td:nth-child(4) {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: #333;
+        color: var(--white);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    #pickers-table td:nth-child(4)::after {
+        content: " Picks";
+        font-weight: normal;
+        font-size: 0.9em;
+        opacity: 0.8;
+    }
+}
