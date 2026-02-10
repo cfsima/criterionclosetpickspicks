@@ -1,3 +1,5 @@
+let globalPickers = [];
+
 document.addEventListener('DOMContentLoaded', () => {
     const tabs = document.querySelectorAll('.tab-btn');
     const contents = document.querySelectorAll('.tab-content');
@@ -25,6 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.target.textContent = isHidden ? `View ${count} ${label}` : `Hide ${label}`;
             }
         }
+    });
+
+    // Picker Ranking Mode Toggle
+    document.querySelectorAll('input[name="ranking-mode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            renderPickers();
+        });
     });
 
     // Fetch and Process Data
@@ -94,6 +103,7 @@ function parseCSV(text) {
 function processAndRender(rows) {
     const movies = [];
     const directorsMap = {};
+    const pickersMap = {};
 
     rows.forEach(row => {
         if (row.length < 4) return;
@@ -119,9 +129,21 @@ function processAndRender(rows) {
                 movies: []
             };
         }
-
         directorsMap[director].totalPicks += count;
         directorsMap[director].movies.push({ title, count });
+
+        // Pickers Aggregation
+        // Split by comma, trimming whitespace
+        const currentPickers = pickedBy.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        currentPickers.forEach(p => {
+            if (!pickersMap[p]) {
+                pickersMap[p] = {
+                    name: p,
+                    picks: []
+                };
+            }
+            pickersMap[p].picks.push({ title, count });
+        });
     });
 
     // Sort Movies
@@ -131,8 +153,51 @@ function processAndRender(rows) {
     const directors = Object.values(directorsMap);
     directors.sort((a, b) => b.totalPicks - a.totalPicks);
 
+    // Calculate Scores for Pickers
+    globalPickers = Object.values(pickersMap).map(picker => {
+        const canonScore = calculateCanonScore(picker.picks);
+        const originalScore = calculateOriginalityScore(picker.picks);
+        return {
+            ...picker,
+            canonScore,
+            originalScore
+        };
+    });
+
     renderMovies(movies);
     renderDirectors(directors);
+    renderPickers();
+}
+
+function calculateCanonScore(picks) {
+    let score = 0;
+    picks.forEach(pick => {
+        const count = pick.count;
+        if (count >= 15) score += 15;
+        else if (count >= 10 && count <= 14) score += 10;
+        else if (count >= 7 && count <= 9) score += 5;
+        else if (count <= 3) score -= 5;
+    });
+    return picks.length > 0 ? (score / picks.length) : 0;
+}
+
+function calculateOriginalityScore(picks) {
+    const w_unique = 10;
+    const w_rare = 5;
+    let unique_score = 0;
+    let rare_score = 0;
+    let total_pick_count_sum = 0;
+
+    picks.forEach(pick => {
+        const count = pick.count;
+        total_pick_count_sum += count;
+
+        if (count === 1) unique_score += w_unique;
+        else if (count >= 2 && count <= 3) rare_score += w_rare;
+    });
+
+    const avg_popularity_penalty = picks.length > 0 ? (total_pick_count_sum / picks.length) : 0;
+    return (unique_score + rare_score) - avg_popularity_penalty;
 }
 
 function createToggleHtml(count, content, label) {
@@ -186,6 +251,45 @@ function renderDirectors(directors) {
             <td style="font-weight: bold;">${escapeHtml(dir.name)}</td>
             <td>${dir.totalPicks}</td>
             <td>${moviesHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderPickers() {
+    const tbody = document.querySelector('#pickers-table tbody');
+    tbody.innerHTML = '';
+    const loadingEl = document.querySelector('#pickers .loading');
+    if(loadingEl) loadingEl.style.display = 'none';
+
+    // Get current mode
+    const modeEl = document.querySelector('input[name="ranking-mode"]:checked');
+    const mode = modeEl ? modeEl.value : 'canon';
+
+    // Sort
+    const sortedPickers = [...globalPickers];
+    if (mode === 'canon') {
+        sortedPickers.sort((a, b) => b.canonScore - a.canonScore);
+    } else {
+        sortedPickers.sort((a, b) => b.originalScore - a.originalScore);
+    }
+
+    sortedPickers.forEach((picker, index) => {
+        // Sort picks by count descending for display
+        picker.picks.sort((a, b) => b.count - a.count);
+
+        const picksStr = picker.picks.map(p => `${p.title} (${p.count})`).join(', ');
+        const count = picker.picks.length;
+        const picksHtml = createToggleHtml(count, escapeHtml(picksStr), 'Picks');
+
+        const score = mode === 'canon' ? picker.canonScore.toFixed(2) : picker.originalScore.toFixed(2);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td style="font-weight: bold;">${escapeHtml(picker.name)}</td>
+            <td>${score}</td>
+            <td>${picksHtml}</td>
         `;
         tbody.appendChild(tr);
     });
