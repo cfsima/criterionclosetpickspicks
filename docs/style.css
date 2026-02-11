@@ -394,23 +394,11 @@ footer a:hover {
         line-height: 1.2;
         margin-bottom: 5px;
         padding-top: 10px; /* Space from top */
+        padding-right: 90px; /* Prevent overlap with score badge */
     }
 
-    /* Score */
+    /* Score (Badge top-right) */
     #pickers-table td:nth-child(3) {
-        font-size: 1rem;
-        color: var(--accent-color);
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-    #pickers-table td:nth-child(3)::before {
-        content: "Score: ";
-        color: var(--text-muted);
-        font-weight: normal;
-    }
-
-    /* Picks Count */
-    #pickers-table td:nth-child(4) {
         position: absolute;
         top: 15px;
         right: 15px;
@@ -421,10 +409,17 @@ footer a:hover {
         font-size: 0.8rem;
         font-weight: bold;
     }
-    #pickers-table td:nth-child(4)::after {
-        content: " Picks";
+    #pickers-table td:nth-child(3)::before {
+        content: "Score: ";
         font-weight: normal;
-        font-size: 0.9em;
         opacity: 0.8;
     }
+
+    /* Picks Count (Toggle Button) */
+    #pickers-table td:nth-child(4) {
+        /* Standard flow */
+        margin-top: 5px;
+        padding-top: 5px;
+    }
+    /* Removed ::after content to avoid "Picks Picks" */
 }
