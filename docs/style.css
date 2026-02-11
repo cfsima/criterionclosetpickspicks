@@ -40,6 +40,15 @@ header h1 {
 header p {
     color: var(--text-muted);
 }
+header p a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+header p a:hover {
+    text-decoration: underline;
+}
+
 
 .tabs {
     display: flex;
