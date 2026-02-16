@@ -170,34 +170,35 @@ function processAndRender(rows) {
 }
 
 function calculateCanonScore(picks) {
-    let score = 0;
+    let sum1 = 0;
+    let sum2 = 0;
+
     picks.forEach(pick => {
         const count = pick.count;
-        if (count >= 15) score += 15;
-        else if (count >= 10 && count <= 14) score += 10;
-        else if (count >= 7 && count <= 9) score += 5;
-        else if (count <= 3) score -= 5;
+        // Bins
+        if (count >= 15) sum1 += 10;
+        else if (count >= 10) sum1 += 8;
+        else if (count >= 7) sum1 += 6;
+        else if (count >= 5) sum1 += 4;
+        else if (count >= 3) sum1 += 2;
+
+        // Smooth
+        sum2 += 10 * (count / (count + 8));
     });
-    return picks.length > 0 ? (score / picks.length) : 0;
+
+    const avg1 = picks.length ? sum1 / picks.length : 0;
+    const avg2 = picks.length ? sum2 / picks.length : 0;
+    return (avg1 + avg2) / 2;
 }
 
 function calculateOriginalityScore(picks) {
-    const w_unique = 10;
-    const w_rare = 5;
-    let unique_score = 0;
-    let rare_score = 0;
-    let total_pick_count_sum = 0;
+    const n = picks.length;
+    if (!n) return 0;
 
-    picks.forEach(pick => {
-        const count = pick.count;
-        total_pick_count_sum += count;
+    const countRare3 = picks.filter(pick => pick.count <= 3).length;
+    const countRare4 = picks.filter(pick => pick.count <= 4).length;
 
-        if (count === 1) unique_score += w_unique;
-        else if (count >= 2 && count <= 3) rare_score += w_rare;
-    });
-
-    const avg_popularity_penalty = picks.length > 0 ? (total_pick_count_sum / picks.length) : 0;
-    return (unique_score + rare_score) - avg_popularity_penalty;
+    return ((countRare3 / n) + (countRare4 / n)) / 2;
 }
 
 function createToggleHtml(count, content, label) {
