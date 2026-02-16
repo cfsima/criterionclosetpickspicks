@@ -170,34 +170,42 @@ function processAndRender(rows) {
 }
 
 function calculateCanonScore(picks) {
-    let score = 0;
-    picks.forEach(pick => {
-        const count = pick.count;
-        if (count >= 15) score += 15;
-        else if (count >= 10 && count <= 14) score += 10;
-        else if (count >= 7 && count <= 9) score += 5;
-        else if (count <= 3) score -= 5;
-    });
-    return picks.length > 0 ? (score / picks.length) : 0;
+    if (!picks.length) return 0;
+
+    const { sum1, sum2 } = picks.reduce((acc, pick) => {
+        const { count } = pick;
+        // Bins
+        if (count >= 15) acc.sum1 += 10;
+        else if (count >= 10) acc.sum1 += 8;
+        else if (count >= 7) acc.sum1 += 6;
+        else if (count >= 5) acc.sum1 += 4;
+        else if (count >= 3) acc.sum1 += 2;
+
+        // Smooth
+        acc.sum2 += 10 * (count / (count + 8));
+        return acc;
+    }, { sum1: 0, sum2: 0 });
+
+    const avg1 = sum1 / picks.length;
+    const avg2 = sum2 / picks.length;
+    return (avg1 + avg2) / 2;
 }
 
 function calculateOriginalityScore(picks) {
-    const w_unique = 10;
-    const w_rare = 5;
-    let unique_score = 0;
-    let rare_score = 0;
-    let total_pick_count_sum = 0;
+    const n = picks.length;
+    if (!n) return 0;
 
-    picks.forEach(pick => {
-        const count = pick.count;
-        total_pick_count_sum += count;
-
-        if (count === 1) unique_score += w_unique;
-        else if (count >= 2 && count <= 3) rare_score += w_rare;
-    });
-
-    const avg_popularity_penalty = picks.length > 0 ? (total_pick_count_sum / picks.length) : 0;
-    return (unique_score + rare_score) - avg_popularity_penalty;
+    const { countRare3, countRare4 } = picks.reduce((counts, pick) => {
+        if (pick.count <= 3) {
+            counts.countRare3++;
+            counts.countRare4++;
+        } else if (pick.count === 4) {
+            counts.countRare4++;
+        }
+        return counts;
+    }, { countRare3: 0, countRare4: 0 });
+        
+    return ((countRare3 / n) + (countRare4 / n)) / 2;
 }
 
 function createToggleHtml(count, content, label) {
