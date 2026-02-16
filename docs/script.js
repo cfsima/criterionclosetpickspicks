@@ -170,24 +170,24 @@ function processAndRender(rows) {
 }
 
 function calculateCanonScore(picks) {
-    let sum1 = 0;
-    let sum2 = 0;
+    if (!picks.length) return 0;
 
-    picks.forEach(pick => {
-        const count = pick.count;
+    const { sum1, sum2 } = picks.reduce((acc, pick) => {
+        const { count } = pick;
         // Bins
-        if (count >= 15) sum1 += 10;
-        else if (count >= 10) sum1 += 8;
-        else if (count >= 7) sum1 += 6;
-        else if (count >= 5) sum1 += 4;
-        else if (count >= 3) sum1 += 2;
+        if (count >= 15) acc.sum1 += 10;
+        else if (count >= 10) acc.sum1 += 8;
+        else if (count >= 7) acc.sum1 += 6;
+        else if (count >= 5) acc.sum1 += 4;
+        else if (count >= 3) acc.sum1 += 2;
 
         // Smooth
-        sum2 += 10 * (count / (count + 8));
-    });
+        acc.sum2 += 10 * (count / (count + 8));
+        return acc;
+    }, { sum1: 0, sum2: 0 });
 
-    const avg1 = picks.length ? sum1 / picks.length : 0;
-    const avg2 = picks.length ? sum2 / picks.length : 0;
+    const avg1 = sum1 / picks.length;
+    const avg2 = sum2 / picks.length;
     return (avg1 + avg2) / 2;
 }
 
@@ -195,9 +195,16 @@ function calculateOriginalityScore(picks) {
     const n = picks.length;
     if (!n) return 0;
 
-    const countRare3 = picks.filter(pick => pick.count <= 3).length;
-    const countRare4 = picks.filter(pick => pick.count <= 4).length;
-
+    const { countRare3, countRare4 } = picks.reduce((counts, pick) => {
+        if (pick.count <= 3) {
+            counts.countRare3++;
+            counts.countRare4++;
+        } else if (pick.count === 4) {
+            counts.countRare4++;
+        }
+        return counts;
+    }, { countRare3: 0, countRare4: 0 });
+        
     return ((countRare3 / n) + (countRare4 / n)) / 2;
 }
 
