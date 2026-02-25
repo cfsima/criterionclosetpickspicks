@@ -101,12 +101,14 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
+    table-layout: fixed; /* Fixed layout to stabilize columns */
 }
 
 th, td {
     text-align: left;
     padding: 12px 15px;
     border-bottom: 1px solid var(--border-color);
+    vertical-align: top; /* Ensure content stays at top */
 }
 
 th {
@@ -177,6 +179,28 @@ footer a {
 footer a:hover {
     color: var(--accent-color);
     text-decoration: underline;
+}
+
+/* Desktop Column Widths */
+@media (min-width: 769px) {
+    /* Movies Table (5 cols) */
+    #movies-table th:nth-child(1) { width: 50px; }  /* Rank */
+    #movies-table th:nth-child(2) { width: 30%; }   /* Title */
+    #movies-table th:nth-child(3) { width: 25%; }   /* Director */
+    #movies-table th:nth-child(4) { width: 80px; }  /* Count */
+    #movies-table th:nth-child(5) { width: auto; }  /* Picked By */
+
+    /* Directors Table (4 cols) */
+    #directors-table th:nth-child(1) { width: 50px; } /* Rank */
+    #directors-table th:nth-child(2) { width: 25%; }  /* Name */
+    #directors-table th:nth-child(3) { width: 100px; } /* Total Picks */
+    #directors-table th:nth-child(4) { width: auto; } /* Top Movies */
+
+    /* Pickers Table (4 cols) */
+    #pickers-table th:nth-child(1) { width: 50px; }   /* Rank */
+    #pickers-table th:nth-child(2) { width: 25%; }    /* Name */
+    #pickers-table th:nth-child(3) { width: 100px; }  /* Score */
+    #pickers-table th:nth-child(4) { width: auto; }   /* Picks */
 }
 
 /* Responsive Mobile Card View */
