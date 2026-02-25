@@ -188,19 +188,16 @@ footer a:hover {
     #movies-table th:nth-child(2) { width: 30%; }   /* Title */
     #movies-table th:nth-child(3) { width: 25%; }   /* Director */
     #movies-table th:nth-child(4) { width: 80px; }  /* Count */
-    #movies-table th:nth-child(5) { width: auto; }  /* Picked By */
 
     /* Directors Table (4 cols) */
-    #directors-table th:nth-child(1) { width: 50px; } /* Rank */
-    #directors-table th:nth-child(2) { width: 25%; }  /* Name */
+    #directors-table th:nth-child(1) { width: 50px; }  /* Rank */
+    #directors-table th:nth-child(2) { width: 25%; }   /* Name */
     #directors-table th:nth-child(3) { width: 100px; } /* Total Picks */
-    #directors-table th:nth-child(4) { width: auto; } /* Top Movies */
 
     /* Pickers Table (4 cols) */
     #pickers-table th:nth-child(1) { width: 50px; }   /* Rank */
     #pickers-table th:nth-child(2) { width: 25%; }    /* Name */
     #pickers-table th:nth-child(3) { width: 100px; }  /* Score */
-    #pickers-table th:nth-child(4) { width: auto; }   /* Picks */
 }
 
 /* Responsive Mobile Card View */
