@@ -7,6 +7,7 @@ import json
 import os
 from datetime import datetime
 from playwright.async_api import async_playwright
+from playwright.async_api import TimeoutError 
 from collections import defaultdict
 
 # Use the search page as the main URL
