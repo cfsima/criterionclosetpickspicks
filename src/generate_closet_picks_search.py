@@ -344,7 +344,7 @@ async def get_latest_post_date(page):
 
     try:
         await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=30000)
-    except Exception as e:
+    except TimeoutError as e:
         print(f"Error waiting for rows: {e}", file=sys.stderr)
         return None
 
@@ -368,12 +368,13 @@ async def main():
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
-                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
             date = await get_latest_post_date(page)
             if date:
                 print(date)
+            await page.close()
             await context.close()
             await browser.close()
         return
