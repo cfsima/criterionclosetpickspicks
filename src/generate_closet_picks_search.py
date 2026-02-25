@@ -1,3 +1,5 @@
+import argparse
+import sys
 import asyncio
 import csv
 import re
@@ -5,6 +7,7 @@ import json
 import os
 from datetime import datetime
 from playwright.async_api import async_playwright
+from playwright.async_api import TimeoutError 
 from collections import defaultdict
 
 # Use the search page as the main URL
@@ -336,7 +339,47 @@ async def scrape_collection(browser, collection):
         await context.close()
     return picks
 
+async def get_latest_post_date(page):
+    print(f"Visiting search page: {MAIN_URL}", file=sys.stderr)
+    await page.goto(MAIN_URL, timeout=60000)
+
+    try:
+        await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=30000)
+    except TimeoutError as e:
+        print(f"Error waiting for rows: {e}", file=sys.stderr)
+        return None
+
+    rows = await page.locator("tr.all-closet-picks-table-row").all()
+    if not rows:
+        return None
+
+    first_row = rows[0]
+    date_el = first_row.locator("td.all-closet-picks-table-data-filmed-on")
+    if await date_el.count() > 0:
+        text = await date_el.inner_text()
+        return text.strip()
+    return None
+
 async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--last-post-date", action="store_true", help="Print the last post date from the site and exit")
+    args = parser.parse_args()
+
+    if args.last_post_date:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+            )
+            page = await context.new_page()
+            date = await get_latest_post_date(page)
+            if date:
+                print(date)
+            await page.close()
+            await context.close()
+            await browser.close()
+        return
+
     state = load_state()
     last_scraped_date = state.get("last_scraped_date")
 
