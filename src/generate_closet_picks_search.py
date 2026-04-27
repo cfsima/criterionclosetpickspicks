@@ -334,6 +334,7 @@ async def scrape_collection(browser, collection):
             })
     except Exception as e:
         print(f"\nError scraping {url}: {e}")
+        return e  # Return exception to signify failure
     finally:
         await page.close()
         await context.close()
@@ -386,6 +387,8 @@ async def main():
     if args.force:
         last_scraped_date = None
 
+    has_errors = False
+
     # Load existing data first (and normalize it)
     aggregated = load_existing_picks(OUTPUT_FILE)
 
@@ -411,7 +414,6 @@ async def main():
                 collections = collections[:LIMIT]
 
             all_picks = []
-            has_errors = False
             semaphore = asyncio.Semaphore(CONCURRENCY)
 
             print(f"Starting to scrape {len(collections)} collections...")
@@ -419,7 +421,9 @@ async def main():
             async def scrape_with_sem(col):
                 async with semaphore:
                     res = await scrape_collection(browser, col)
-                    if len(res) > 0:
+                    if isinstance(res, Exception):
+                        print("E", end="", flush=True)
+                    elif len(res) > 0:
                         print(".", end="", flush=True)
                     else:
                         print("x", end="", flush=True)
@@ -427,11 +431,12 @@ async def main():
 
             tasks = [scrape_with_sem(col) for col in collections]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            has_errors = any(isinstance(r, Exception) or len(r) == 0 for r in results)
+            has_errors = any(isinstance(r, Exception) for r in results)
             print("\nScraping complete.")
 
             for res in results:
-                all_picks.extend(res)
+                if not isinstance(res, Exception):
+                    all_picks.extend(res)
 
             print(f"Merging {len(all_picks)} new picks...")
             for pick in all_picks:
