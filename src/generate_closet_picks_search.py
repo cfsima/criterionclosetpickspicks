@@ -334,6 +334,7 @@ async def scrape_collection(browser, collection):
             })
     except Exception as e:
         print(f"\nError scraping {url}: {e}")
+        return e  # Return exception to signify failure
     finally:
         await page.close()
         await context.close()
@@ -363,6 +364,7 @@ async def get_latest_post_date(page):
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--last-post-date", action="store_true", help="Print the last post date from the site and exit")
+    parser.add_argument("--force", action="store_true", help="Force scrape without checking stop date")
     args = parser.parse_args()
 
     if args.last_post_date:
@@ -382,6 +384,10 @@ async def main():
 
     state = load_state()
     last_scraped_date = state.get("last_scraped_date")
+    if args.force:
+        last_scraped_date = None
+
+    has_errors = False
 
     # Load existing data first (and normalize it)
     aggregated = load_existing_picks(OUTPUT_FILE)
@@ -415,18 +421,22 @@ async def main():
             async def scrape_with_sem(col):
                 async with semaphore:
                     res = await scrape_collection(browser, col)
-                    if len(res) > 0:
+                    if isinstance(res, Exception):
+                        print("E", end="", flush=True)
+                    elif len(res) > 0:
                         print(".", end="", flush=True)
                     else:
                         print("x", end="", flush=True)
                     return res
 
             tasks = [scrape_with_sem(col) for col in collections]
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            has_errors = any(isinstance(r, Exception) for r in results)
             print("\nScraping complete.")
 
             for res in results:
-                all_picks.extend(res)
+                if not isinstance(res, Exception):
+                    all_picks.extend(res)
 
             print(f"Merging {len(all_picks)} new picks...")
             for pick in all_picks:
@@ -454,7 +464,7 @@ async def main():
 
     # Update State if we found a new date
     # If newest_date is None (no rows found?), keep old state
-    if newest_date:
+    if newest_date and not has_errors:
         save_state(newest_date)
 
     print("Done.")
