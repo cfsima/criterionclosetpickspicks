@@ -203,12 +203,15 @@ def load_existing_picks(filepath):
     print(f"Loaded {count_loaded} movies from CSV (merged to {len(aggregated)} unique entries).")
     return aggregated
 
-async def get_collections_from_search(page, stop_date=None):
+async def get_collections_from_search(page, stop_date=None, known_pickers=None):
+    if known_pickers is None:
+        known_pickers = set()
+    consecutive_known_count = 0
     print(f"Visiting search page: {MAIN_URL}")
     await page.goto(MAIN_URL, timeout=60000)
 
     try:
-        await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=30000)
+        await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=60000)
     except Exception as e:
         print(f"Error waiting for rows: {e}")
 
@@ -250,18 +253,29 @@ async def get_collections_from_search(page, stop_date=None):
                 date_str = await date_el.inner_text()
                 date_str = date_str.strip()
 
-            # Store the very first date we see as the newest date
             if newest_date_str is None and date_str:
                 newest_date_str = date_str
 
+            text_content = await row.inner_text()
+            name = clean_picker_name(text_content)
+
+            if name in known_pickers:
+                consecutive_known_count += 1
+            else:
+                consecutive_known_count = 0
+
+            is_past_stop_date = False
             if stop_dt and date_str:
                 try:
                     current_dt = datetime.strptime(date_str, "%b %d, %Y")
                     if current_dt <= stop_dt:
-                        print(f"Reached date {date_str} which is <= last scraped {stop_date}. Stopping.")
-                        break
+                        is_past_stop_date = True
                 except ValueError:
                     pass
+
+            if is_past_stop_date and consecutive_known_count > 10:
+                print(f"Reached date {date_str} <= last scraped AND saw 10 consecutive known pickers. Stopping.")
+                break
 
             click_attr = await row.get_attribute("@click") or ""
             match = re.search(r"window\.location\.href\s*=\s*[\'\"]([^\'\"]+)[\'\"]", click_attr)
@@ -279,9 +293,6 @@ async def get_collections_from_search(page, stop_date=None):
 
             if not full_url:
                 continue
-
-            text_content = await row.inner_text()
-            name = clean_picker_name(text_content)
 
             collections.append({"url": full_url, "picker": name})
 
@@ -301,7 +312,7 @@ async def scrape_collection(browser, collection):
     picks = []
 
     context = await browser.new_context(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0", bypass_csp=True
     )
     page = await context.new_page()
     try:
@@ -345,7 +356,7 @@ async def get_latest_post_date(page):
     await page.goto(MAIN_URL, timeout=60000)
 
     try:
-        await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=30000)
+        await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=60000)
     except TimeoutError as e:
         print(f"Error waiting for rows: {e}", file=sys.stderr)
         return None
@@ -369,9 +380,9 @@ async def main():
 
     if args.last_post_date:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.firefox.launch(headless=True)
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0", bypass_csp=True
             )
             page = await context.new_page()
             date = await get_latest_post_date(page)
@@ -393,15 +404,20 @@ async def main():
     aggregated = load_existing_picks(OUTPUT_FILE)
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.firefox.launch(headless=True)
 
         context = await browser.new_context(
-             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0", bypass_csp=True
         )
         page = await context.new_page()
 
-        # Pass stop_date to stop scraping early
-        collections, newest_date = await get_collections_from_search(page, stop_date=last_scraped_date)
+        # Collect all known pickers from aggregated data
+        known_pickers = set()
+        for key, data in aggregated.items():
+            known_pickers.update(data["pickers"])
+
+        # Pass stop_date to stop scraping early, but with robust backfilling
+        collections, newest_date = await get_collections_from_search(page, stop_date=last_scraped_date, known_pickers=known_pickers)
         await page.close()
         await context.close()
 
