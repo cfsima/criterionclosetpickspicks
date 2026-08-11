@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install playwright
-          playwright install chromium
+          playwright install --with-deps firefox
 
       - name: Run scraper
         run: python src/generate_closet_picks_search.py
