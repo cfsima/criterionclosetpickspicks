@@ -5,6 +5,7 @@ import csv
 import re
 import json
 import os
+import unicodedata
 from datetime import datetime
 from playwright.async_api import async_playwright
 from playwright.async_api import TimeoutError 
@@ -14,7 +15,7 @@ from collections import defaultdict
 MAIN_URL = "https://www.criterion.com/closet-picks/search"
 OUTPUT_FILE = "docs/closet_picks.csv"
 STATE_FILE = "scrape_state.json"
-CONCURRENCY = 5
+CONCURRENCY = 2
 LIMIT = None # Set to an integer for testing, None for full run
 
 # Full Director Mappings from the original script
@@ -92,6 +93,8 @@ DIRECTOR_MAPPINGS = {
     "Roberto Rossellini’s War Trilogy": "Roberto Rossellini",
     "The Signifyin’ Works of Marlon Riggs": "Marlon Riggs",
     "Pasolini 101": "Pier Paolo Pasolini",
+    "The Complete Kubrick": "Stanley Kubrick",
+    "Brief Encounters / The Long Farewell: Two Films by Kira Muratova": "Kira Muratova",
 }
 
 IGNORE_TITLES = {
@@ -127,11 +130,14 @@ REGEX_PATTERNS = [
 ]
 
 def clean_picker_name(text):
+    text = unicodedata.normalize("NFC", text.replace("\xa0", " "))
     text = re.sub(r"\s+[A-Za-z]{3}\s+\d{1,2},\s+\d{4}$", "", text).strip()
-    text = re.sub(r"[’\']s? Closet Picks.*$", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"[’\']s?\s*(?:Mobile\s+)?Closet Picks.*$", "", text, flags=re.IGNORECASE).strip()
     return text.upper()
 
 def normalize_director(title, director):
+    title = unicodedata.normalize("NFC", title.replace("\xa0", " ")).strip()
+    director = unicodedata.normalize("NFC", director.replace("\xa0", " ")).strip()
     if "Collector" not in director:
         return director
     if title in IGNORE_TITLES:
@@ -184,15 +190,23 @@ def load_existing_picks(filepath):
         count_loaded = 0
         for row in reader:
             if len(row) < 4: continue
-            title = row[0]
-            director = row[1]
-            pickers_str = row[3]
+            title = unicodedata.normalize("NFC", row[0].replace("\xa0", " ")).strip()
+            director = unicodedata.normalize("NFC", row[1].replace("\xa0", " ")).strip()
+            pickers_str = unicodedata.normalize("NFC", row[3].replace("\xa0", " "))
 
             # Normalize director immediately upon loading to fix bad data
             director = normalize_director(title, director)
 
             # Split and clean pickers
-            pickers = [p.strip() for p in pickers_str.split(", ") if p.strip()]
+            raw_pickers = [p.strip() for p in pickers_str.split(", ") if p.strip()]
+            pickers = []
+            for p in raw_pickers:
+                p = unicodedata.normalize("NFC", p).strip()
+                # Normalize legacy mobile closet picks name
+                if "WES ANDERSON" in p and "MOBILE" in p:
+                    pickers.append("WES ANDERSON")
+                else:
+                    pickers.append(p)
 
             key = (title, director)
             # Merge if we already have entries for this key (from normalization merging)
@@ -206,9 +220,12 @@ def load_existing_picks(filepath):
 async def get_collections_from_search(page, stop_date=None, known_pickers=None):
     if known_pickers is None:
         known_pickers = set()
-    consecutive_known_count = 0
     print(f"Visiting search page: {MAIN_URL}")
     await page.goto(MAIN_URL, timeout=60000)
+
+    title = await page.title()
+    if "Just a moment" in title or "Cloudflare" in title:
+        raise RuntimeError(f"Cloudflare challenge encountered on search page (Title: '{title}')")
 
     try:
         await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=60000)
@@ -238,7 +255,7 @@ async def get_collections_from_search(page, stop_date=None, known_pickers=None):
     if stop_date:
         try:
             stop_dt = datetime.strptime(stop_date, "%b %d, %Y")
-            print(f"Stopping if date <= {stop_dt}")
+            print(f"Checking against stop date: {stop_dt}")
         except ValueError:
             print(f"Invalid stop date format: {stop_date}. Ignoring.")
 
@@ -246,12 +263,10 @@ async def get_collections_from_search(page, stop_date=None, known_pickers=None):
 
     for row in rows:
         try:
-            # Check date first if we need to stop
             date_el = row.locator("td.all-closet-picks-table-data-filmed-on")
             date_str = ""
             if await date_el.count() > 0:
-                date_str = await date_el.inner_text()
-                date_str = date_str.strip()
+                date_str = (await date_el.inner_text()).strip()
 
             if newest_date_str is None and date_str:
                 newest_date_str = date_str
@@ -259,23 +274,19 @@ async def get_collections_from_search(page, stop_date=None, known_pickers=None):
             text_content = await row.inner_text()
             name = clean_picker_name(text_content)
 
-            if name in known_pickers:
-                consecutive_known_count += 1
-            else:
-                consecutive_known_count = 0
-
-            is_past_stop_date = False
-            if stop_dt and date_str:
+            current_dt = None
+            if date_str:
                 try:
                     current_dt = datetime.strptime(date_str, "%b %d, %Y")
-                    if current_dt <= stop_dt:
-                        is_past_stop_date = True
                 except ValueError:
                     pass
 
-            if is_past_stop_date and consecutive_known_count > 10:
-                print(f"Reached date {date_str} <= last scraped AND saw 10 consecutive known pickers. Stopping.")
-                break
+            # Backfill logic:
+            # If picker is already in known_pickers AND date is <= stop_dt,
+            # we already have this picker's picks, so we can skip them.
+            # If a picker is missing from known_pickers, do NOT skip (backfill them).
+            if stop_dt and current_dt and current_dt <= stop_dt and name in known_pickers:
+                continue
 
             click_attr = await row.get_attribute("@click") or ""
             match = re.search(r"window\.location\.href\s*=\s*[\'\"]([^\'\"]+)[\'\"]", click_attr)
@@ -300,10 +311,10 @@ async def get_collections_from_search(page, stop_date=None, known_pickers=None):
             print(f"Error extracting row: {e}")
 
     if collections:
-        print(f"First: {collections[0]}")
-        print(f"Last: {collections[-1]}")
+        print(f"First to scrape: {collections[0]}")
+        print(f"Last to scrape: {collections[-1]}")
 
-    print(f"Extracted {len(collections)} new collections.")
+    print(f"Queued {len(collections)} collections to scrape.")
     return collections, newest_date_str
 
 async def scrape_collection(browser, collection):
@@ -312,17 +323,35 @@ async def scrape_collection(browser, collection):
     picks = []
 
     context = await browser.new_context(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0", bypass_csp=True
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+        bypass_csp=True,
+        ignore_https_errors=True
     )
     page = await context.new_page()
     try:
         await page.goto(url, timeout=60000)
         await page.wait_for_timeout(2000)
 
+        title = await page.title()
+        if "Just a moment" in title or "Cloudflare" in title:
+            raise RuntimeError(f"Cloudflare challenge encountered on {url} (Title: '{title}')")
+
+        try:
+            await page.wait_for_selector("figcaption dl", timeout=10000)
+        except Exception:
+            pass
+
         items = await page.locator("figcaption dl").all()
 
         if len(items) == 0:
-            print(f"\n[!] No items for {url} ({await page.title()})", end="", flush=True)
+            title = await page.title()
+            if "Just a moment" in title or "Cloudflare" in title:
+                raise RuntimeError(f"Cloudflare challenge encountered on {url}")
+            await page.wait_for_timeout(3000)
+            items = await page.locator("figcaption dl").all()
+
+        if len(items) == 0:
+            raise RuntimeError(f"No items found for {url} ({await page.title()})")
 
         for item in items:
             dts = item.locator("dt")
@@ -336,10 +365,11 @@ async def scrape_collection(browser, collection):
             if not title and count > 0:
                  title = await dts.last.inner_text()
             director = await item.locator("dd").first.inner_text()
-            director = normalize_director(title.strip(), director.strip())
+            title = unicodedata.normalize("NFC", title.replace("\xa0", " ")).strip()
+            director = normalize_director(title, director)
 
             picks.append({
-                "title": title.strip(),
+                "title": title,
                 "director": director,
                 "picker": picker
             })
@@ -354,6 +384,10 @@ async def scrape_collection(browser, collection):
 async def get_latest_post_date(page):
     print(f"Visiting search page: {MAIN_URL}", file=sys.stderr)
     await page.goto(MAIN_URL, timeout=60000)
+
+    title = await page.title()
+    if "Just a moment" in title or "Cloudflare" in title:
+        raise RuntimeError(f"Cloudflare challenge encountered on {MAIN_URL} (Title: '{title}')")
 
     try:
         await page.wait_for_selector("tr.all-closet-picks-table-row", timeout=60000)
@@ -382,7 +416,9 @@ async def main():
         async with async_playwright() as p:
             browser = await p.firefox.launch(headless=True)
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0", bypass_csp=True
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+                bypass_csp=True,
+                ignore_https_errors=True
             )
             page = await context.new_page()
             date = await get_latest_post_date(page)
@@ -407,7 +443,9 @@ async def main():
         browser = await p.firefox.launch(headless=True)
 
         context = await browser.new_context(
-             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0", bypass_csp=True
+             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0",
+             bypass_csp=True,
+             ignore_https_errors=True
         )
         page = await context.new_page()
 
@@ -437,6 +475,7 @@ async def main():
             async def scrape_with_sem(col):
                 async with semaphore:
                     res = await scrape_collection(browser, col)
+                    await asyncio.sleep(1.0)
                     if isinstance(res, Exception):
                         print("E", end="", flush=True)
                     elif len(res) > 0:
@@ -447,11 +486,11 @@ async def main():
 
             tasks = [scrape_with_sem(col) for col in collections]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            has_errors = any(isinstance(r, Exception) for r in results)
+            has_errors = any(isinstance(r, Exception) or not r for r in results)
             print("\nScraping complete.")
 
             for res in results:
-                if not isinstance(res, Exception):
+                if not isinstance(res, Exception) and res:
                     all_picks.extend(res)
 
             print(f"Merging {len(all_picks)} new picks...")
@@ -478,10 +517,11 @@ async def main():
             pickers_str = ", ".join(sorted(data["pickers"]))
             writer.writerow([title, director, data["count"], pickers_str])
 
-    # Update State if we found a new date
-    # If newest_date is None (no rows found?), keep old state
+    # Update State if we found a new date and had no errors
     if newest_date and not has_errors:
         save_state(newest_date)
+    elif has_errors:
+        print("\nWARNING: Some collections failed to scrape or returned empty results. State will NOT be updated.")
 
     print("Done.")
 
