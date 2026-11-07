@@ -156,12 +156,60 @@ tr:hover {
 .pickers-list {
     color: var(--text-muted);
     font-size: 0.9rem;
-    line-height: 1.4;
+    line-height: 1.5;
     transition: max-height 0.3s ease-out;
 }
 
 .pickers-list.hidden {
     display: none;
+}
+
+/* Entity Cross Links */
+.item-link {
+    color: var(--text-color);
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 215, 0, 0.45);
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.item-link:hover {
+    color: var(--accent-color);
+    text-decoration-color: var(--accent-color);
+}
+
+.item-link:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.pick-count {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    font-weight: normal;
+}
+
+/* Row Highlight Animation on Navigation */
+@keyframes rowHighlight {
+    0% {
+        background-color: rgba(255, 215, 0, 0.35);
+    }
+    60% {
+        background-color: rgba(255, 215, 0, 0.18);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+tr.highlight-target {
+    animation: rowHighlight 2.5s ease-out;
+}
+
+tr.highlight-target td {
+    animation: rowHighlight 2.5s ease-out;
 }
 
 footer {
@@ -225,6 +273,12 @@ footer a:hover {
         box-shadow: var(--shadow);
         position: relative;
         padding-top: 45px; /* Space for Rank/Count badges */
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    tr.highlight-target {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 12px rgba(255, 215, 0, 0.4);
     }
 
     td {

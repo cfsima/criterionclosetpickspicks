@@ -1,22 +1,42 @@
 let globalPickers = [];
 
-document.addEventListener('DOMContentLoaded', () => {
+function switchTab(tabName) {
     const tabs = document.querySelectorAll('.tab-btn');
     const contents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    contents.forEach(c => c.classList.toggle('active', c.id === tabName));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const tabs = document.querySelectorAll('.tab-btn');
 
     // Tab Switching
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            contents.forEach(c => c.classList.remove('active'));
-
-            tab.classList.add('active');
-            document.getElementById(tab.dataset.tab).classList.add('active');
+            switchTab(tab.dataset.tab);
         });
     });
 
-    // Toggle Expandable Lists (Pickers / Movies)
+    // Delegated click handler for expandable lists and cross-links
     document.addEventListener('click', (e) => {
+        const pickerLink = e.target.closest('.picker-link');
+        if (pickerLink) {
+            e.preventDefault();
+            const pickerName = pickerLink.dataset.picker;
+            navigateToPicker(pickerName);
+            return;
+        }
+
+        const movieLink = e.target.closest('.movie-link');
+        if (movieLink) {
+            e.preventDefault();
+            const movieTitle = movieLink.dataset.movie;
+            const director = movieLink.dataset.director;
+            navigateToMovie(movieTitle, director);
+            return;
+        }
+
         if (e.target.classList.contains('picker-toggle')) {
             const list = e.target.nextElementSibling;
             if (list && list.classList.contains('pickers-list')) {
@@ -112,13 +132,15 @@ function processAndRender(rows) {
         const director = row[1];
         const count = parseInt(row[2], 10);
         const pickedBy = row[3];
+        const currentPickers = pickedBy.split(',').map(s => s.trim()).filter(s => s.length > 0);
 
         // Movies List
         movies.push({
             title,
             director,
             count,
-            pickedBy
+            pickedBy,
+            pickers: currentPickers
         });
 
         // Directors Aggregation
@@ -130,11 +152,10 @@ function processAndRender(rows) {
             };
         }
         directorsMap[director].totalPicks += count;
-        directorsMap[director].movies.push({ title, count });
+        directorsMap[director].movies.push({ title, count, director });
 
         // Pickers Aggregation
         // Split by comma, trimming whitespace
-        const currentPickers = pickedBy.split(',').map(s => s.trim()).filter(s => s.length > 0);
         currentPickers.forEach(p => {
             if (!pickersMap[p]) {
                 pickersMap[p] = {
@@ -142,7 +163,7 @@ function processAndRender(rows) {
                     picks: []
                 };
             }
-            pickersMap[p].picks.push({ title, count });
+            pickersMap[p].picks.push({ title, count, director });
         });
     });
 
@@ -224,8 +245,14 @@ function renderMovies(movies) {
 
     movies.forEach((movie, index) => {
         const tr = document.createElement('tr');
+        tr.dataset.movieTitle = movie.title;
+        tr.dataset.director = movie.director;
 
-        const pickersHtml = createToggleHtml(movie.count, escapeHtml(movie.pickedBy), 'Pickers');
+        const pickersListHtml = movie.pickers.map(p => {
+            return `<a href="#" class="item-link picker-link" data-picker="${escapeHtml(p)}">${escapeHtml(p)}</a>`;
+        }).join(', ');
+
+        const pickersHtml = createToggleHtml(movie.count, pickersListHtml, 'Pickers');
 
         tr.innerHTML = `
             <td>${index + 1}</td>
@@ -247,13 +274,17 @@ function renderDirectors(directors) {
         // Sort director's movies by count desc
         dir.movies.sort((a, b) => b.count - a.count);
 
-        const movieStr = dir.movies.map(m => `${m.title} (${m.count})`).join(', ');
+        const moviesListHtml = dir.movies.map(m => {
+            const dirAttr = ` data-director="${escapeHtml(dir.name)}"`;
+            return `<a href="#" class="item-link movie-link" data-movie="${escapeHtml(m.title)}"${dirAttr}>${escapeHtml(m.title)}</a> <span class="pick-count">(${m.count})</span>`;
+        }).join(', ');
 
         // Count of unique movies picked for this director
         const movieCount = dir.movies.length;
-        const moviesHtml = createToggleHtml(movieCount, escapeHtml(movieStr), 'Movies');
+        const moviesHtml = createToggleHtml(movieCount, moviesListHtml, 'Movies');
 
         const tr = document.createElement('tr');
+        tr.dataset.directorName = dir.name;
         tr.innerHTML = `
             <td>${index + 1}</td>
             <td style="font-weight: bold;">${escapeHtml(dir.name)}</td>
@@ -286,13 +317,18 @@ function renderPickers() {
         // Sort picks by count descending for display
         picker.picks.sort((a, b) => b.count - a.count);
 
-        const picksStr = picker.picks.map(p => `${p.title} (${p.count})`).join(', ');
+        const picksListHtml = picker.picks.map(p => {
+            const dirAttr = p.director ? ` data-director="${escapeHtml(p.director)}"` : '';
+            return `<a href="#" class="item-link movie-link" data-movie="${escapeHtml(p.title)}"${dirAttr}>${escapeHtml(p.title)}</a> <span class="pick-count">(${p.count})</span>`;
+        }).join(', ');
+
         const count = picker.picks.length;
-        const picksHtml = createToggleHtml(count, escapeHtml(picksStr), 'Picks');
+        const picksHtml = createToggleHtml(count, picksListHtml, 'Picks');
 
         const score = mode === 'canon' ? picker.canonScore.toFixed(2) : picker.originalScore.toFixed(2);
 
         const tr = document.createElement('tr');
+        tr.dataset.pickerName = picker.name;
         tr.innerHTML = `
             <td>${index + 1}</td>
             <td style="font-weight: bold;">${escapeHtml(picker.name)}</td>
@@ -301,6 +337,66 @@ function renderPickers() {
         `;
         tbody.appendChild(tr);
     });
+}
+
+function highlightRow(row) {
+    document.querySelectorAll('.highlight-target').forEach(el => el.classList.remove('highlight-target'));
+    void row.offsetWidth;
+    row.classList.add('highlight-target');
+    setTimeout(() => {
+        row.classList.remove('highlight-target');
+    }, 3000);
+}
+
+function navigateToPicker(pickerName) {
+    switchTab('pickers');
+    const targetRow = Array.from(document.querySelectorAll('#pickers-table tbody tr')).find(
+        tr => tr.dataset.pickerName === pickerName
+    );
+
+    if (targetRow) {
+        const toggleBtn = targetRow.querySelector('.picker-toggle');
+        const list = targetRow.querySelector('.pickers-list');
+        if (list && list.classList.contains('hidden')) {
+            list.classList.remove('hidden');
+            if (toggleBtn) {
+                toggleBtn.textContent = `Hide ${toggleBtn.dataset.label}`;
+            }
+        }
+
+        setTimeout(() => {
+            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            highlightRow(targetRow);
+        }, 50);
+    }
+}
+
+function navigateToMovie(movieTitle, director) {
+    switchTab('movies');
+    const rows = Array.from(document.querySelectorAll('#movies-table tbody tr'));
+    let targetRow = null;
+    if (director) {
+        targetRow = rows.find(tr => tr.dataset.movieTitle === movieTitle && tr.dataset.director === director);
+    }
+    if (!targetRow) {
+        targetRow = rows.find(tr => tr.dataset.movieTitle === movieTitle);
+    }
+
+    if (targetRow) {
+        const toggleBtn = targetRow.querySelector('.picker-toggle');
+        const list = targetRow.querySelector('.pickers-list');
+        if (list && list.classList.contains('hidden')) {
+            list.classList.remove('hidden');
+            if (toggleBtn) {
+                toggleBtn.textContent = `Hide ${toggleBtn.dataset.label}`;
+            }
+        }
+
+        setTimeout(() => {
+            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            highlightRow(targetRow);
+        }, 50);
+    }
 }
 
 function escapeHtml(text) {
