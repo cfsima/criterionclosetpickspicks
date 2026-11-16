@@ -9,7 +9,7 @@ rm -rf "$REPO_DIR"
 git clone --depth 1 https://github.com/cfsima/criterionclosetpickspicks.git "$REPO_DIR"
 cd "$REPO_DIR"
 
-python src/generate_closet_picks_search.py
+python3 src/generate_closet_picks_search.py
 
 git config user.name "nas-scraper[bot]"
 git config user.email "nas-scraper[bot]@users.noreply.github.com"
