@@ -1,8 +1,6 @@
 name: Update Closet Picks
 
 on:
-  schedule:
-    - cron: '0 0 * * 0' # Weekly on Sunday at midnight
   workflow_dispatch: # Allow manual trigger
 
 permissions:
